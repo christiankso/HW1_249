@@ -1,0 +1,31 @@
+{
+  "device": "NVIDIA GeForce RTX 4070 SUPER",
+  "image": "../data/kitti/training/image_2/000010.png",
+  "rows": [
+    {
+      "model": "torchvision:fasterrcnn_resnet50_fpn_v2",
+      "weights_mb": 171.0,
+      "peak_mb": 438.9
+    },
+    {
+      "model": "torchvision:fcos_resnet50_fpn",
+      "weights_mb": 132.7,
+      "peak_mb": 289.4
+    },
+    {
+      "model": "yolo:yolo11x.pt",
+      "weights_mb": 8.1,
+      "peak_mb": 279.6
+    },
+    {
+      "model": "hf_detr:PekingU/rtdetr_r50vd",
+      "weights_mb": 174.4,
+      "peak_mb": 298.1
+    },
+    {
+      "model": "gdino:IDEA-Research/grounding-dino-tiny",
+      "weights_mb": 668.4,
+      "peak_mb": 1371.3
+    }
+  ]
+}

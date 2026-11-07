@@ -1,0 +1,1 @@
+PYTHONIOENCODING=utf-8 ../.venv/Scripts/python -m DeepDataMiningLearning.ngdet.run_eval --models torchvision:fasterrcnn_resnet50_fpn_v2 torchvision:fcos_resnet50_fpn --datasets kitti --max-images 0 --score-thr 0.3 --device cuda --roots kitti=../data/kitti --out-dir ../experiments/kitti_cnn

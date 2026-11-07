@@ -1,0 +1,10 @@
+torchvision:fasterrcnn_resnet50_fpn_v2     weights    171.0 MB   peak    438.9 MB
+torchvision:fcos_resnet50_fpn              weights    132.7 MB   peak    289.4 MB
+WARNING 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+WARNING 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+WARNING 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+WARNING 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+WARNING 'half' is deprecated and will be removed in the future. Use 'quantize' instead.
+yolo:yolo11x.pt                            weights      8.1 MB   peak    279.6 MB
+hf_detr:PekingU/rtdetr_r50vd               weights    174.4 MB   peak    298.1 MB
+gdino:IDEA-Research/grounding-dino-tiny    weights    668.4 MB   peak   1371.3 MB

@@ -1,0 +1,77 @@
+
+======================================================================
+[torchvision:fasterrcnn_resnet50_fpn_v2]  x  [kitti]
+======================================================================
+Warning: Open3D not available. 3D LiDAR visualization will be disabled.
+Warning: Mayavi visualization utils not available. Some 3D visualization features may not work.
+✅ KITTI utilities loaded successfully
+📊 Detected dataset type: standard_split
+📋 Loaded 5984 samples for train split
+📋 Loaded 10 object categories
+🎯 Active classes for training: 8
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.19s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=6.37s).
+Accumulating evaluation results...
+DONE (t=1.11s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.234
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.432
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.233
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.119
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.227
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.308
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.109
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.312
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.328
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.304
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.320
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.368
+
+======================================================================
+[torchvision:fcos_resnet50_fpn]  x  [kitti]
+======================================================================
+📊 Detected dataset type: standard_split
+📋 Loaded 5984 samples for train split
+📋 Loaded 10 object categories
+🎯 Active classes for training: 8
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.21s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=6.97s).
+Accumulating evaluation results...
+DONE (t=1.28s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.232
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.433
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.227
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.121
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.218
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.312
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.110
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.320
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.342
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.277
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.348
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.388
+
+######################################################################
+# RESULTS (unified taxonomy: ['vehicle', 'person', 'cyclist'])
+######################################################################
+model                                     dataset        mAP   AP50   AP75  per-class AP50:95
+--------------------------------------------------------------------------
+torchvision:fasterrcnn_resnet50_fpn_v2    kitti        0.234  0.432  0.233  vehicle=0.447  person=0.254  cyclist=0.001
+torchvision:fcos_resnet50_fpn             kitti        0.232  0.433  0.227  vehicle=0.455  person=0.237  cyclist=0.004
+
+Saved metrics -> ../experiments/kitti_cnn\metrics.json
+Saved report  -> ../experiments/kitti_cnn\report.md
+Saved heatmap -> ../experiments/kitti_cnn\heatmap_mAP.png

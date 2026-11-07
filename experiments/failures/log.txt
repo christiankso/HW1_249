@@ -1,0 +1,18 @@
+YOLO11x {
+ "cyclist_gt_boxes": 133,
+ "mean_best_iou_cyclist_pred": 0.11758668121314586,
+ "frac_cyclist_pred_iou>=0.5": 0.015037593984962405,
+ "frac_no_cyclist_pred_overlap": 0.631578947368421,
+ "n_with_bike_and_person": 72,
+ "mean_iou_union_bike_person": 0.44448089599609375,
+ "frac_union_iou>=0.5": 0.5694444444444444
+}
+G-DINO-T {
+ "cyclist_gt_boxes": 133,
+ "mean_best_iou_cyclist_pred": 0.4340806670094791,
+ "frac_cyclist_pred_iou>=0.5": 0.37593984962406013,
+ "frac_no_cyclist_pred_overlap": 0.16541353383458646,
+ "n_with_bike_and_person": 124,
+ "mean_iou_union_bike_person": 0.5966770052909851,
+ "frac_union_iou>=0.5": 0.7580645161290323
+}

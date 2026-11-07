@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zero-Shot Cross-Domain 2D Detection</title>
+<style>
+  @page { size: Letter; margin: 0.7in 0.75in; }
+  body { font-family: "Times New Roman", Georgia, serif; font-size: 10.5pt; line-height: 1.38; color: #111; background: #fff; }
+  h1 { font-size: 17pt; text-align: center; margin: 0 0 4px; }
+  .sub { text-align: center; font-size: 10pt; color: #444; margin-bottom: 14px; }
+  h2 { font-size: 12.5pt; border-bottom: 1px solid #999; padding-bottom: 2px; margin: 18px 0 6px; }
+  h3 { font-size: 11pt; margin: 12px 0 4px; }
+  p { margin: 5px 0; text-align: justify; }
+  table { border-collapse: collapse; width: 100%; font-size: 9pt; margin: 6px 0 4px; page-break-inside: avoid; }
+  th, td { border: 1px solid #bbb; padding: 2px 5px; text-align: center; }
+  th { background: #eee; }
+  td:first-child, th:first-child { text-align: left; }
+  .cap { font-size: 9pt; color: #333; text-align: center; margin: 2px 0 10px; }
+  figure { margin: 8px 0; page-break-inside: avoid; }
+  figure img { width: 100%; }
+  code, pre { font-family: Consolas, "Courier New", monospace; font-size: 8.3pt; }
+  pre { background: #f5f5f5; border: 1px solid #ddd; padding: 5px 7px; white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
+  .abstract { border: 1px solid #ccc; padding: 6px 10px; background: #fafafa; font-size: 10pt; }
+  b.best { color: #000; }
+  ol.refs li { margin-bottom: 3px; font-size: 9.5pt; }
+  .two { display: flex; gap: 8px; } .two figure { flex: 1; }
+  ul { margin: 4px 0 4px 18px; padding: 0; }
+</style>
+</head>
+<body>
+
+<h1>Do Modern Detectors Generalize? Zero-Shot COCO&nbsp;&rarr;&nbsp;KITTI Evaluation of Five Detectors from Four Families</h1>
+<div class="sub">Track A &mdash; Experimental Model Evaluation &nbsp;|&nbsp; Christian &nbsp;|&nbsp; October 2026<br>
+All numbers in this report were produced on the author's machine (RTX 4070 SUPER); logs, commands and raw outputs are in the accompanying <code>experiments/</code> folder.</div>
+
+<div class="abstract"><b>Abstract.</b> We evaluate five COCO-pretrained detectors &mdash; Faster R-CNN (two-stage, anchor-based), FCOS (one-stage, anchor-free), YOLO11x (one-stage, NMS-based real-time), RT-DETR (query-based transformer, NMS-free) and Grounding DINO-Tiny (open-vocabulary, text-prompted) &mdash; on COCO val2017 (5,000 images) and, with no retraining, on 5,984 KITTI images. Predictions and labels are projected into a shared 3-class taxonomy (vehicle / person / cyclist). In-domain, the three strongest models are within 0.012 mAP (0.480&ndash;0.492); on KITTI, all four closed-set models collapse into a 0.229&ndash;0.239 band, a ~51% relative drop. <i>Domain shift erases architectural differences.</i> The degradation is very uneven: vehicle AP barely changes (&minus;0 to &minus;14%), person AP halves, and cyclist AP falls to &asymp;0. We show quantitatively that the cyclist collapse is a <b>label-definition mismatch</b> (COCO boxes the bicycle alone; KITTI boxes rider+bicycle) rather than a model failure. We also report latency (5.8&ndash;54.9 FPS) and peak GPU memory (280&ndash;1,371 MB) and discuss the speed&ndash;accuracy trade-off.</div>
+
+<h2>1. Introduction</h2>
+<p>Object detectors are almost always benchmarked on the same distribution they were trained on (COCO). Deployed systems such as autonomous vehicles, however, see a different camera, image aspect ratio, object scale distribution and label definition. This report asks: <b>(1)</b> how much accuracy do COCO-pretrained detectors lose on a driving dataset without retraining, and which classes and object scales degrade most; <b>(2)</b> does the detector architecture (anchor-based vs. anchor-free, NMS-based vs. query-based, closed-set vs. open-vocabulary) change the answer; and <b>(3)</b> what accuracy do we buy per millisecond and per megabyte of GPU memory? We use the <code>ngdet</code> evaluation framework from the course repository [13], which wraps each model behind a common <code>predict()</code> API and scores every run with <code>pycocotools</code>.</p>
+
+<h2>2. Models</h2>
+<p>We evaluate five configurations from four detector families (Table 1). Faster R-CNN and FCOS share the same ResNet-50+FPN backbone family and the same torchvision implementation, so their comparison isolates the effect of the <i>head and target assignment</i>. YOLO11x and RT-DETR are the two dominant real-time paradigms (dense prediction + NMS vs. set prediction with object queries). Grounding DINO represents open-vocabulary detection: its classifier is replaced by text-conditioned similarity to a prompt.</p>
+<table>
+<tr><th>Model</th><th>Family / paradigm</th><th>Checkpoint (source)</th><th>Input resolution</th><th>Duplicate removal</th></tr>
+<tr><td>Faster R-CNN v2 [1]</td><td>Two-stage, anchor-based (RPN + RoI head), FPN [2]</td><td><code>fasterrcnn_resnet50_fpn_v2</code> (torchvision COCO weights)</td><td>short side 800, long &le;1333</td><td>per-class NMS, IoU 0.5</td></tr>
+<tr><td>FCOS [3]</td><td>One-stage, anchor-free, per-pixel + centerness, focal loss [4]</td><td><code>fcos_resnet50_fpn</code> (torchvision COCO weights)</td><td>short side 800, long &le;1333</td><td>NMS, IoU 0.6</td></tr>
+<tr><td>YOLO11x [8]</td><td>One-stage, anchor-free, decoupled head, DFL, task-aligned assignment</td><td><code>yolo11x.pt</code> (Ultralytics 8.4.193)</td><td>letterbox, long side 640</td><td>NMS, IoU 0.7 (Ultralytics default)</td></tr>
+<tr><td>RT-DETR-R50 [6]</td><td>Query-based transformer, Hungarian matching [5]</td><td><code>PekingU/rtdetr_r50vd</code> (HF Transformers)</td><td>resized to 640&times;640</td><td><b>none</b> (one-to-one set prediction)</td></tr>
+<tr><td>Grounding DINO-T [7]</td><td>Open-vocabulary, text-prompted DETR-style</td><td><code>IDEA-Research/grounding-dino-tiny</code> (HF)</td><td>short side 800, long &le;1333</td><td><b>none</b>; text threshold 0.25</td></tr>
+</table>
+<div class="cap">Table 1. Models and settings. Values were read from the loaded model objects / processors (torchvision <code>model.transform</code>, <code>roi_heads.nms_thresh</code>; HF <code>AutoImageProcessor.size</code>), not copied from documentation.</div>
+
+<h2>3. Datasets and Label Mapping</h2>
+<p><b>COCO val2017</b> [9]: 5,000 images, 80 classes; the in-domain reference. <b>KITTI 2D object</b> [10]: 1242&times;375 front-camera driving images from Karlsruhe. We use the framework's deterministic 80% "train" split of the 7,481 labeled training images (<b>5,984 images</b>). None of the five models were trained on KITTI, so this is a pure zero-shot evaluation. Because the label sets differ, both predictions and ground truth are projected into one 3-class taxonomy (<code>driving3</code> in <code>ngdet/taxonomy.py</code>):</p>
+<table>
+<tr><th>Unified class</th><th>COCO model outputs / COCO GT</th><th>KITTI GT</th><th>Open-vocab prompt (G-DINO)</th></tr>
+<tr><td>vehicle</td><td>car, truck, bus, train, motorcycle</td><td>Car, Van, Truck, Tram</td><td>"car . truck . bus . van"</td></tr>
+<tr><td>person</td><td>person</td><td>Pedestrian, Person_sitting</td><td>"person . pedestrian"</td></tr>
+<tr><td>cyclist</td><td>bicycle</td><td>Cyclist</td><td>"bicycle . cyclist"</td></tr>
+<tr><td><i>dropped</i></td><td>all other 72 classes</td><td>Misc, DontCare</td><td>&ndash;</td></tr>
+</table>
+<div class="cap">Table 2. Taxonomy mapping. The "bicycle &rarr; cyclist" row is an imperfect bijection, analyzed in &sect;8.1.</div>
+
+<h2>4. Experimental Setup and Reproducibility</h2>
+<table>
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>Hardware</td><td>NVIDIA GeForce RTX 4070 SUPER (12 GB), Windows 11; batch size 1</td></tr>
+<tr><td>Software</td><td>Python 3.11.4, PyTorch 2.14.1+cu126, torchvision 0.29.1, Ultralytics 8.4.193, Transformers 5.22.0, pycocotools (full list: <code>experiments/env.txt</code>)</td></tr>
+<tr><td>Confidence threshold</td><td>0.3, applied identically to every model <i>after</i> the model's own post-processing (adapters call the backend with threshold 0)</td></tr>
+<tr><td>Metric</td><td>COCO-style AP@[.5:.95], AP50, AP75, AP<sub>S/M/L</sub>, AR@100, per-class AP (<code>pycocotools</code>), over the 3 unified classes</td></tr>
+<tr><td>Latency</td><td>end-to-end <code>predict()</code> incl. pre/post-processing, KITTI image 000010, 10 warm-up + 100 timed iterations, fp32 and fp16</td></tr>
+<tr><td>GPU memory</td><td><code>torch.cuda.max_memory_allocated()</code> over 5 inferences (<code>scripts/gpu_memory.py</code>)</td></tr>
+</table>
+<p>Exact commands (also stored as <code>experiments/*/command.txt</code>, run from the repository root):</p>
+<pre>python -m DeepDataMiningLearning.ngdet.run_eval --models torchvision:fasterrcnn_resnet50_fpn_v2 torchvision:fcos_resnet50_fpn yolo:yolo11x.pt hf_detr:PekingU/rtdetr_r50vd gdino:IDEA-Research/grounding-dino-tiny --datasets coco --max-images 0 --score-thr 0.3 --device cuda --roots coco=../data/coco/val2017 --coco-ann ../data/coco/annotations/instances_val2017.json --out-dir ../experiments/coco_full
+
+python -m DeepDataMiningLearning.ngdet.run_eval --models &lt;same 5 models&gt; --datasets kitti --max-images 0 --score-thr 0.3 --device cuda --roots kitti=../data/kitti --out-dir ../experiments/kitti_full
+
+python -m DeepDataMiningLearning.ngdet.latency --models &lt;same 5 models&gt; --accel fp32 fp16 --image ../data/kitti/training/image_2/000010.png --warmup 10 --iters 100 --device cuda --out-dir ../experiments/latency</pre>
+<p><b>Issue encountered.</b> In the first KITTI run, Faster R-CNN and FCOS crashed with <code>UnicodeEncodeError</code>: the KITTI loader prints an emoji, which Windows' default cp1252 console encoding cannot write to a redirected log. They were rerun with <code>PYTHONIOENCODING=utf-8</code> (<code>experiments/kitti_cnn/</code>), with no code changes and identical settings.</p>
+
+<h2>5. Results</h2>
+<table>
+<tr><th>Model</th><th>mAP</th><th>AP50</th><th>AP75</th><th>AP<sub>S</sub></th><th>AP<sub>M</sub></th><th>AP<sub>L</sub></th><th>AR@100</th><th>vehicle</th><th>person</th><th>cyclist</th><th>run (s)</th></tr>
+<tr><td>Faster R-CNN</td><td>0.480</td><td><b>0.730</b></td><td>0.511</td><td><b>0.276</b></td><td>0.489</td><td>0.648</td><td><b>0.570</b></td><td>0.519</td><td>0.554</td><td>0.367</td><td>282</td></tr>
+<tr><td>FCOS</td><td>0.413</td><td>0.653</td><td>0.428</td><td>0.201</td><td>0.424</td><td>0.594</td><td>0.542</td><td>0.456</td><td>0.504</td><td>0.280</td><td>239</td></tr>
+<tr><td>YOLO11x</td><td>0.491</td><td>0.659</td><td><b>0.538</b></td><td>0.230</td><td><b>0.511</b></td><td><b>0.708</b></td><td>0.539</td><td>0.531</td><td>0.558</td><td><b>0.386</b></td><td><b>162</b></td></tr>
+<tr><td>RT-DETR</td><td><b>0.492</b></td><td>0.709</td><td>0.518</td><td>0.241</td><td>0.504</td><td>0.704</td><td>0.567</td><td><b>0.537</b></td><td><b>0.570</b></td><td>0.370</td><td>287</td></tr>
+<tr><td>G-DINO-T</td><td>0.377</td><td>0.522</td><td>0.417</td><td>0.194</td><td>0.397</td><td>0.533</td><td>0.499</td><td>0.329</td><td>0.525</td><td>0.275</td><td>1279</td></tr>
+</table>
+<div class="cap">Table 3. COCO val2017 (5,000 images, in-domain). Per-class columns are AP@[.5:.95].</div>
+
+<table>
+<tr><th>Model</th><th>mAP</th><th>AP50</th><th>AP75</th><th>AP<sub>S</sub></th><th>AP<sub>M</sub></th><th>AP<sub>L</sub></th><th>AR@100</th><th>vehicle</th><th>person</th><th>cyclist</th><th>run (s)</th></tr>
+<tr><td>Faster R-CNN</td><td>0.234</td><td>0.432</td><td>0.233</td><td>0.119</td><td><b>0.227</b></td><td>0.308</td><td>0.328</td><td>0.447</td><td><b>0.254</b></td><td>0.001</td><td>330</td></tr>
+<tr><td>FCOS</td><td>0.232</td><td>0.433</td><td>0.227</td><td>0.121</td><td>0.218</td><td>0.312</td><td>0.342</td><td>0.455</td><td>0.237</td><td>0.004</td><td>248</td></tr>
+<tr><td>YOLO11x</td><td>0.229</td><td>0.418</td><td>0.230</td><td><b>0.129</b></td><td>0.217</td><td>0.304</td><td>0.299</td><td>0.459</td><td>0.229</td><td>0.001</td><td><b>218</b></td></tr>
+<tr><td>RT-DETR</td><td><b>0.239</b></td><td><b>0.437</b></td><td><b>0.234</b></td><td><b>0.129</b></td><td><b>0.227</b></td><td><b>0.314</b></td><td>0.309</td><td><b>0.482</b></td><td>0.232</td><td>0.002</td><td>291</td></tr>
+<tr><td>G-DINO-T</td><td>0.179</td><td>0.343</td><td>0.172</td><td>0.104</td><td>0.180</td><td>0.257</td><td><b>0.350</b></td><td>0.319</td><td>0.201</td><td><b>0.018</b></td><td>1352</td></tr>
+</table>
+<div class="cap">Table 4. KITTI zero-shot (5,984 images, no retraining).</div>
+
+<table>
+<tr><th>Model</th><th>mAP</th><th>AP<sub>S</sub></th><th>AP<sub>M</sub></th><th>AP<sub>L</sub></th><th>vehicle</th><th>person</th><th>cyclist</th></tr>
+<tr><td>Faster R-CNN</td><td>&minus;51%</td><td>&minus;57%</td><td>&minus;54%</td><td>&minus;52%</td><td>&minus;14%</td><td>&minus;54%</td><td>&minus;100%</td></tr>
+<tr><td>FCOS</td><td><b>&minus;44%</b></td><td><b>&minus;39%</b></td><td>&minus;49%</td><td>&minus;47%</td><td><b>&minus;0%</b></td><td>&minus;53%</td><td>&minus;99%</td></tr>
+<tr><td>YOLO11x</td><td>&minus;53%</td><td>&minus;44%</td><td>&minus;57%</td><td>&minus;57%</td><td>&minus;14%</td><td>&minus;59%</td><td>&minus;100%</td></tr>
+<tr><td>RT-DETR</td><td>&minus;51%</td><td>&minus;46%</td><td>&minus;55%</td><td>&minus;55%</td><td>&minus;10%</td><td>&minus;59%</td><td>&minus;100%</td></tr>
+<tr><td>G-DINO-T</td><td>&minus;52%</td><td>&minus;46%</td><td>&minus;55%</td><td>&minus;52%</td><td>&minus;3%</td><td>&minus;62%</td><td>&minus;94%</td></tr>
+</table>
+<div class="cap">Table 5. Relative change COCO &rarr; KITTI (generated by <code>scripts/analyze.py</code>).</div>
+
+<h2>6. Analysis A &mdash; Cross-Dataset Generalization</h2>
+<figure><img src="../experiments/analysis/ap_by_class.png"><div class="cap">Figure 1. Per-class AP on COCO (blue) vs. KITTI (orange). Vehicle transfers almost perfectly; person halves; cyclist vanishes.</div></figure>
+<p><b>Domain shift compresses the field.</b> On COCO the closed-set models span 0.413&ndash;0.492 mAP (0.079 range); on KITTI they span 0.229&ndash;0.239 (0.010 range). A 2015-design two-stage detector (Faster R-CNN) and a 2024 real-time model (YOLO11x) become statistically indistinguishable. The best in-domain model is <i>not</i> what determines zero-shot performance. FCOS, the weakest closed-set model on COCO, has the <i>smallest</i> relative drop (&minus;44%), largely because it loses nothing on vehicles.</p>
+<p><b>The drop is driven by classes, not uniformly.</b> Vehicle AP is nearly preserved (&minus;0 to &minus;14%); cars are the most common COCO vehicle and look similar in Germany and in COCO's Flickr photos. Person AP falls by 53&ndash;62% for every model. We attribute this to (i) scale: KITTI pedestrians are often distant and only 25&ndash;60 px tall; (ii) KITTI annotation policy, where many people near the image edge or in the background are not labeled or are <code>DontCare</code>. The framework drops <code>DontCare</code> rather than treating it as an ignore region, so correct detections there count as false positives (Fig. 4a). Cyclist AP drops to essentially zero (&sect;8.1).</p>
+<figure><img src="../experiments/analysis/ap_by_scale.png"><div class="cap">Figure 2. AP by COCO object-size bucket (small &lt; 32&sup2; px, medium &lt; 96&sup2;, large).</div></figure>
+<p><b>Scale.</b> Contrary to the intuition that "small objects suffer most", relative drops are similar across scales (39&ndash;57%), and for most models <i>large</i> objects drop slightly more than small ones. In KITTI, large objects are mostly near, <b>truncated</b> cars at the image border and heavily occluded parked cars. KITTI's ground truth covers the full extent of such cars, while COCO-trained models tend to box only the visible part, which produces IoU &lt; 0.75 even when the object is found. Small objects were already weak on COCO (AP<sub>S</sub> &le; 0.28), so they have less to lose in absolute terms.</p>
+
+<h2>7. Analysis B &mdash; Architecture Comparison</h2>
+<h3>7.1 Faster R-CNN vs. FCOS: anchors vs. anchor-free (same backbone)</h3>
+<p>Both use a ResNet-50 + FPN backbone from torchvision, so differences come from the head. Faster R-CNN's RPN places 3 anchors per location and assigns positives by IoU &ge; 0.7 with ground truth; a second stage then refines RoI-pooled proposals. FCOS removes anchors: every feature-map location inside a GT box (restricted to a center region and a size range per FPN level) regresses its distances to the four box sides, and a <i>centerness</i> branch down-weights off-center predictions. On COCO the two-stage model leads by 0.067 mAP and especially on small objects (0.276 vs 0.201): the second-stage RoI refinement helps localization of small boxes. Part of the gap is also checkpoint vintage: the "v2" Faster R-CNN weights come from an improved training recipe, while torchvision's FCOS weights use the original 1&times; recipe. On KITTI the gap disappears (0.234 vs 0.232), and FCOS has the highest AR@100 among the closed-set models (0.342). Without anchor shapes tuned to COCO statistics, the anchor-free head appears slightly <i>less</i> biased towards COCO box shapes, which plausibly matters for KITTI's wide, short car boxes.</p>
+<h3>7.2 YOLO11x vs. RT-DETR: NMS-based dense prediction vs. query-based set prediction</h3>
+<p>YOLO11 predicts a box at every location of three feature maps and relies on NMS (IoU 0.7) to remove duplicates. Its training uses task-aligned assignment (TAL), which picks positives by a joint score of classification confidence and IoU, plus CIoU + Distribution Focal Loss for boxes. RT-DETR instead decodes a fixed set of 300 object queries and is trained with Hungarian one-to-one matching [5], so each object is supervised by exactly one query. This makes NMS unnecessary: duplicates are penalized during training instead of removed afterwards. Their COCO mAP is identical (0.491 vs 0.492), but the error profiles differ. YOLO11x has the best <b>AP75</b> (0.538) but the lowest AP50 among the top three (0.659): its boxes are tight, but it misses more objects at the loose threshold. RT-DETR and Faster R-CNN have higher AP50 (0.709/0.730) and higher AR@100. On KITTI, RT-DETR is the best closed-set model overall (0.239) and on vehicles (0.482), suggesting that its global attention context helps with partially occluded cars.</p>
+
+<h2>8. Failure Analysis</h2>
+<h3>8.1 The cyclist collapse is a label-definition mismatch</h3>
+<p>KITTI's <code>Cyclist</code> box encloses the rider <i>and</i> the bicycle. COCO has no cyclist class: COCO models emit a <code>bicycle</code> box (the frame only) and a separate <code>person</code> box (the rider). The mapping in Table 2 sends <code>bicycle &rarr; cyclist</code>, so the predicted cyclist box is systematically too small, and the rider produces a person box with no matching person GT. We verified this with <code>scripts/failure_cases.py</code>: for every KITTI cyclist in the first 600 images (133 boxes), we measured the best IoU between the GT box and (a) any predicted cyclist box, and (b) the union of the best-matching bicycle and person boxes.</p>
+<table>
+<tr><th>Model</th><th>mean best IoU, cyclist pred</th><th>cyclist pred IoU &ge; 0.5</th><th>no overlapping cyclist pred</th><th>mean IoU, bike &cup; person</th><th>bike &cup; person IoU &ge; 0.5</th></tr>
+<tr><td>YOLO11x</td><td>0.118</td><td>1.5%</td><td>63%</td><td>0.444</td><td>57% (of 72)</td></tr>
+<tr><td>G-DINO-T</td><td>0.434</td><td>37.6%</td><td>17%</td><td>0.597</td><td>76% (of 124)</td></tr>
+</table>
+<div class="cap">Table 6. Cyclist box geometry on KITTI (133 GT cyclists, images 0&ndash;599). Source: <code>experiments/failures/cyclist_iou_stats.json</code>.</div>
+<p>For YOLO11x, only 1.5% of cyclists are matched at IoU 0.5 by its bicycle box, but merging the bicycle and rider boxes would match 57% of them. The detector <i>sees</i> cyclists; the evaluation definition simply does not agree with COCO's. Grounding DINO, which is literally prompted with the word "cyclist", produces rider+bike boxes 38% of the time. This is the clearest benefit of open-vocabulary detection in our study. Its cyclist AP is still low (0.018), which we attribute to ranking: the same prompt also fires on parked bicycles and pedestrians, so false positives with high scores dominate the precision&ndash;recall curve.</p>
+
+<div class="two">
+<figure><img src="../experiments/failures/YOLO11x_cyclist_000006.png"><div class="cap">(a) YOLO11x, KITTI #6. A distant cyclist (center-left, green GT) is missed. A correctly detected person on the left has no GT box (unlabeled), so it counts as a false positive. The car behind the hedge on the right is boxed only by its visible part.</div></figure>
+</div>
+<div class="two">
+<figure><img src="../experiments/failures/YOLO11x_cyclist_000008.png"><div class="cap">(b) YOLO11x, KITTI #8: all parked cars found, including the truncated car at the right border.</div></figure>
+<figure><img src="../experiments/failures/G-DINO-T_cyclist_000008.png"><div class="cap">(c) Grounding DINO-T, same image: misses the truncated car and several occluded cars, which explains its low vehicle AP.</div></figure>
+</div>
+<div class="cap">Figure 4. Qualitative failures. Green = KITTI GT; orange = vehicle, red = person, blue = cyclist predictions (score &ge; 0.3).</div>
+
+<h3>8.2 Other failure modes</h3>
+<ul>
+<li><b>Unlabeled and <code>DontCare</code> objects</b> become false positives because the framework drops <code>DontCare</code> instead of ignoring it (Fig. 4a). This inflates the person drop in particular.</li>
+<li><b>Truncation and occlusion:</b> partial boxes vs. KITTI's full-extent boxes give IoU between 0.5 and 0.75. This explains why AP75 drops more than AP50 for every model (e.g. YOLO11x: AP50 &minus;37%, AP75 &minus;57%).</li>
+<li><b>Aspect ratio:</b> KITTI images are 3.3:1. YOLO and RT-DETR resize to 640 px, so a 40-px-tall distant pedestrian shrinks to about 20 px. The 800-px-short-side models (Faster R-CNN, FCOS, G-DINO) upsample instead. Despite this, AP<sub>S</sub> is similar across models (0.10&ndash;0.13).</li>
+</ul>
+
+<h2>9. Analysis C &mdash; Speed&ndash;Accuracy Trade-off</h2>
+<table>
+<tr><th>Model</th><th>fp32 mean (ms)</th><th>fp32 p90 (ms)</th><th>fp32 FPS</th><th>fp16 mean (ms)</th><th>Peak GPU mem (MB)</th><th>COCO mAP</th><th>KITTI mAP</th></tr>
+<tr><td>Faster R-CNN</td><td>39.4</td><td>43.1</td><td>25.4</td><td>25.8</td><td>439</td><td>0.480</td><td>0.234</td></tr>
+<tr><td>FCOS</td><td>26.4</td><td>29.9</td><td>37.9</td><td>25.6</td><td>289</td><td>0.413</td><td>0.232</td></tr>
+<tr><td>YOLO11x</td><td><b>18.2</b></td><td><b>22.0</b></td><td><b>54.9</b></td><td>20.7</td><td><b>280</b></td><td>0.491</td><td>0.229</td></tr>
+<tr><td>RT-DETR</td><td>32.8</td><td>35.7</td><td>30.4</td><td>35.2</td><td>298</td><td><b>0.492</b></td><td><b>0.239</b></td></tr>
+<tr><td>G-DINO-T</td><td>172.9</td><td>184.7</td><td>5.8</td><td>171.5</td><td>1371</td><td>0.377</td><td>0.179</td></tr>
+</table>
+<div class="cap">Table 7. End-to-end latency (pre-processing + model + post-processing, batch 1, KITTI image), RTX 4070 SUPER. Source: <code>experiments/latency/</code>.</div>
+<figure style="width:72%; margin-left:14%"><img src="../experiments/analysis/speed_accuracy.png"><div class="cap">Figure 3. Speed vs. accuracy. Marker area is proportional to peak GPU memory.</div></figure>
+<p>YOLO11x is <b>Pareto-optimal</b>: it is the fastest model (18 ms, 55 FPS) and uses the least memory, at essentially the best COCO accuracy. RT-DETR matches its accuracy at 1.8&times; the latency in this implementation (HF Transformers, not the authors' TensorRT-optimized code). Grounding DINO costs 9.5&times; YOLO's latency and 4.9&times; its memory, because every image passes through a BERT text encoder and several layers of image&ndash;text cross-attention. <b>fp16 only helps Faster R-CNN</b> (&minus;35%). For YOLO and RT-DETR at batch 1, latency is dominated by pre/post-processing and kernel-launch overhead rather than arithmetic, and the dtype casts add overhead, so fp16 is slightly slower. This is a reminder that speed-ups reported for large batches or TensorRT do not automatically transfer to a simple single-image pipeline.</p>
+
+<h2>10. Analysis D &mdash; Closed-Set vs. Open-Vocabulary</h2>
+<p>Grounding DINO has the lowest mAP on both datasets (0.377 / 0.179), but this should not be read as "open-vocabulary is worse". First, it is the <i>Tiny</i> model with a Swin-T backbone, compared against x-large/R50 closed-set models. Second, its errors are concentrated on <b>vehicle</b> (COCO 0.329 vs &ge;0.456 for the others) while its person AP (0.525) is competitive. The prompt "car . truck . bus . van" must be matched at the phrase level, and motorcycles and trains, which COCO GT maps to vehicle, are never prompted. That is a prompt/taxonomy mismatch, not a recognition failure. Third, it has the <b>highest KITTI AR@100 (0.350)</b> and the best cyclist geometry (Table 6). It finds objects but ranks them poorly, which is consistent with its text-similarity scores being less calibrated than a trained softmax/sigmoid classifier. Its relative drop (&minus;52%) is the same as the closed-set models', so web-scale grounding pre-training did <i>not</i> buy robustness to the KITTI domain in our setting. Its one real advantage is that a class definition can be changed without retraining, as the cyclist experiment shows.</p>
+
+<h2>11. Limitations</h2>
+<ul>
+<li><b>Score threshold 0.3.</b> We discard detections below 0.3 before computing AP, so precision&ndash;recall curves are truncated, and our AP is lower than official numbers, which keep all detections down to 0.001. Our numbers are therefore comparable <i>across models in this report</i> but not to published COCO leaderboards (which also use 80 classes, not 3).</li>
+<li><b>KITTI subset.</b> We used the framework's 80% split of KITTI's labeled training set. It is held out from all five models, but it is not the official KITTI test server and uses COCO AP, not KITTI's Easy/Moderate/Hard AP.</li>
+<li><b>No fine-tuning.</b> We measured zero-shot transfer only. A natural next step is fine-tuning one model per family on KITTI to measure how much of the gap is recoverable.</li>
+</ul>
+
+<h2>12. Conclusions</h2>
+<p>(1) <b>Domain shift dominates architecture.</b> Five detectors spanning 2015&ndash;2024 designs all lose about half their mAP on KITTI and converge to within 0.010 mAP of each other. (2) The loss is <b>class-specific</b>: vehicles transfer, persons halve, cyclists vanish. Most of the cyclist collapse is caused by <b>dataset label definitions</b>, not detector weakness. We show that merging the bicycle and rider boxes would raise the IoU&ge;0.5 match rate from 1.5% to 57%. For any cross-dataset study, auditing the taxonomy mapping is as important as choosing the model. (3) Anchor-free FCOS transfers best relative to its in-domain score, and NMS-free RT-DETR is the best KITTI model overall. (4) YOLO11x is Pareto-optimal for speed and memory. Open-vocabulary Grounding DINO is 9.5&times; slower and not more robust, but its text interface fixes definition mismatches without retraining.</p>
+
+<h2>References</h2>
+<ol class="refs">
+<li>S. Ren, K. He, R. Girshick, J. Sun. "Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks." NeurIPS 2015.</li>
+<li>T.-Y. Lin, P. Doll&aacute;r, R. Girshick, K. He, B. Hariharan, S. Belongie. "Feature Pyramid Networks for Object Detection." CVPR 2017.</li>
+<li>Z. Tian, C. Shen, H. Chen, T. He. "FCOS: Fully Convolutional One-Stage Object Detection." ICCV 2019.</li>
+<li>T.-Y. Lin, P. Goyal, R. Girshick, K. He, P. Doll&aacute;r. "Focal Loss for Dense Object Detection." ICCV 2017.</li>
+<li>N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, S. Zagoruyko. "End-to-End Object Detection with Transformers (DETR)." ECCV 2020.</li>
+<li>Y. Zhao, W. Lv, S. Xu, et al. "DETRs Beat YOLOs on Real-time Object Detection (RT-DETR)." CVPR 2024.</li>
+<li>S. Liu, Z. Zeng, T. Ren, et al. "Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection." ECCV 2024.</li>
+<li>G. Jocher, J. Qiu. "Ultralytics YOLO11" (software and documentation), https://docs.ultralytics.com/models/yolo11/, 2024.</li>
+<li>T.-Y. Lin, M. Maire, S. Belongie, et al. "Microsoft COCO: Common Objects in Context." ECCV 2014.</li>
+<li>A. Geiger, P. Lenz, R. Urtasun. "Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite." CVPR 2012.</li>
+<li>TorchVision detection models documentation, https://pytorch.org/vision/stable/models.html#object-detection.</li>
+<li>Hugging Face Transformers documentation: RT-DETR and Grounding DINO model pages, https://huggingface.co/docs/transformers.</li>
+<li>K. Liu (lkk688). DeepDataMiningLearning, <code>ngdet</code> detection evaluation framework and tutorial, https://github.com/lkk688/DeepDataMiningLearning.</li>
+<li>C. Feng, Y. Zhong, Y. Gao, M. Scott, W. Huang. "TOOD: Task-aligned One-stage Object Detection." ICCV 2021.</li>
+</ol>
+
+<h2>Appendix &mdash; Artifact Index</h2>
+<table>
+<tr><th>Path</th><th>Contents</th></tr>
+<tr><td><code>experiments/env.txt</code></td><td><code>nvidia-smi</code> output, library versions, full <code>pip freeze</code></td></tr>
+<tr><td><code>experiments/coco_full/</code></td><td>command, full log with every pycocotools table, <code>metrics.json</code>, per-image prediction counts, <code>report.md</code></td></tr>
+<tr><td><code>experiments/kitti_full/</code>, <code>kitti_cnn/</code></td><td>same, for KITTI (YOLO/RT-DETR/G-DINO, and the Faster R-CNN/FCOS rerun)</td></tr>
+<tr><td><code>experiments/latency/</code></td><td>latency command, log, <code>latency.json</code>, GPU memory JSON</td></tr>
+<tr><td><code>experiments/failures/</code></td><td>overlay images and cyclist IoU statistics</td></tr>
+<tr><td><code>scripts/</code></td><td><code>analyze.py</code> (tables and figures), <code>gpu_memory.py</code>, <code>failure_cases.py</code></td></tr>
+</table>
+</body>
+</html>

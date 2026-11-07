@@ -1,0 +1,112 @@
+[
+  {
+    "mean_ms": 39.44357400003355,
+    "p50_ms": 39.08385000067938,
+    "p90_ms": 43.148619999556104,
+    "std_ms": 3.1900642304795674,
+    "fps": 25.352672148805517,
+    "speedup": 1.0,
+    "model": "torchvision:fasterrcnn_resnet50_fpn_v2",
+    "spec": "torchvision:fasterrcnn_resnet50_fpn_v2",
+    "accel": "fp32"
+  },
+  {
+    "mean_ms": 25.800770999594533,
+    "p50_ms": 25.24565000021539,
+    "p90_ms": 27.66841999946337,
+    "std_ms": 1.3886478055658387,
+    "fps": 38.758531673945534,
+    "speedup": 1.5287750122139148,
+    "model": "torchvision:fasterrcnn_resnet50_fpn_v2",
+    "spec": "torchvision:fasterrcnn_resnet50_fpn_v2",
+    "accel": "fp16"
+  },
+  {
+    "mean_ms": 26.409855000201787,
+    "p50_ms": 25.171599998429883,
+    "p90_ms": 29.87528999801726,
+    "std_ms": 3.701021420358119,
+    "fps": 37.86465317558008,
+    "speedup": 1.0,
+    "model": "torchvision:fcos_resnet50_fpn",
+    "spec": "torchvision:fcos_resnet50_fpn",
+    "accel": "fp32"
+  },
+  {
+    "mean_ms": 25.571519000295666,
+    "p50_ms": 24.60735000022396,
+    "p90_ms": 29.28940000201692,
+    "std_ms": 2.5265232829420565,
+    "fps": 39.106006959869596,
+    "speedup": 1.0327839734470379,
+    "model": "torchvision:fcos_resnet50_fpn",
+    "spec": "torchvision:fcos_resnet50_fpn",
+    "accel": "fp16"
+  },
+  {
+    "mean_ms": 18.222102999861818,
+    "p50_ms": 17.430550000426592,
+    "p90_ms": 21.962179999172807,
+    "std_ms": 2.406180459235648,
+    "fps": 54.87840783292594,
+    "speedup": 1.0,
+    "model": "yolo:yolo11x.pt",
+    "spec": "yolo:yolo11x.pt",
+    "accel": "fp32"
+  },
+  {
+    "mean_ms": 20.661698000003526,
+    "p50_ms": 19.614349999756087,
+    "p90_ms": 24.298550002640695,
+    "std_ms": 2.646235456760381,
+    "fps": 48.39873276629198,
+    "speedup": 0.8819266935301595,
+    "model": "yolo:yolo11x.pt",
+    "spec": "yolo:yolo11x.pt",
+    "accel": "fp16"
+  },
+  {
+    "mean_ms": 32.847189999920374,
+    "p50_ms": 32.07684999870253,
+    "p90_ms": 35.70259000007354,
+    "std_ms": 3.2097624119392942,
+    "fps": 30.444004494826622,
+    "speedup": 1.0,
+    "model": "hf_detr:rtdetr_r50vd",
+    "spec": "hf_detr:PekingU/rtdetr_r50vd",
+    "accel": "fp32"
+  },
+  {
+    "mean_ms": 35.19021900006919,
+    "p50_ms": 33.694800002194825,
+    "p90_ms": 40.08914999976696,
+    "std_ms": 3.904856298922399,
+    "fps": 28.416987117870274,
+    "speedup": 0.9334181750859746,
+    "model": "hf_detr:rtdetr_r50vd",
+    "spec": "hf_detr:PekingU/rtdetr_r50vd",
+    "accel": "fp16"
+  },
+  {
+    "mean_ms": 172.87148499995965,
+    "p50_ms": 170.790100000886,
+    "p90_ms": 184.73110999948403,
+    "std_ms": 8.509945837912175,
+    "fps": 5.784644008815181,
+    "speedup": 1.0,
+    "model": "gdino:grounding-dino-tiny",
+    "spec": "gdino:IDEA-Research/grounding-dino-tiny",
+    "accel": "fp32"
+  },
+  {
+    "mean_ms": 171.5130120001777,
+    "p50_ms": 169.50589999942167,
+    "p90_ms": 179.2353999993793,
+    "std_ms": 10.700174615959106,
+    "fps": 5.8304614229441905,
+    "speedup": 1.00792052441934,
+    "model": "gdino:grounding-dino-tiny",
+    "spec": "gdino:IDEA-Research/grounding-dino-tiny",
+    "accel": "fp16"
+  }
+]
